@@ -26,7 +26,7 @@ export class User {
   @Column({ type: 'json', nullable: true })
   preferences: Record<string, any>;
 
-  @Column({ type: 'simple-array', default: ['PLAYER'] })
+  @Column({ type: 'simple-array' })
   roles: string[];
 
   @CreateDateColumn()
