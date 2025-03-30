@@ -1,0 +1,84 @@
+name: Stable
+type: military
+unit_type: cavalry
+levels:
+  1:
+    cost:
+      wood: 260
+      clay: 140
+      iron: 220
+      crop: 100
+    training_speed: 1.0
+    upgrade_time: 1200
+  2:
+    cost:
+      wood: 420
+      clay: 225
+      iron: 350
+      crop: 160
+    training_speed: 0.95
+    upgrade_time: 2400
+  3:
+    cost:
+      wood: 670
+      clay: 360
+      iron: 560
+      crop: 260
+    training_speed: 0.90
+    upgrade_time: 4800  # 80 minutes
+  4:
+    cost:
+      wood: 1070
+      clay: 580
+      iron: 900
+      crop: 420
+    training_speed: 0.85
+    upgrade_time: 9600  # 2.67 heures
+  5:
+    cost:
+      wood: 1720
+      clay: 925
+      iron: 1440
+      crop: 670
+    training_speed: 0.80
+    upgrade_time: 19200  # 5.33 heures
+  6:
+    cost:
+      wood: 2750
+      clay: 1480
+      iron: 2300
+      crop: 1070
+    training_speed: 0.75
+    upgrade_time: 38400  # 10.67 heures
+  7:
+    cost:
+      wood: 4400
+      clay: 2370
+      iron: 3680
+      crop: 1720
+    training_speed: 0.70
+    upgrade_time: 76800  # 21.33 heures
+  8:
+    cost:
+      wood: 7040
+      clay: 3790
+      iron: 5890
+      crop: 2750
+    training_speed: 0.65
+    upgrade_time: 153600  # 42.67 heures
+  9:
+    cost:
+      wood: 11270
+      clay: 6070
+      iron: 9420
+      crop: 4400
+    training_speed: 0.60
+    upgrade_time: 307200  # 85.33 heures
+  10:
+    cost:
+      wood: 18030
+      clay: 9710
+      iron: 15070
+      crop: 7040
+    training_speed: 0.50  # 50% plus rapide qu'au niveau 1
+    upgrade_time: 614400  # 170.67 heures (7.11 jours)

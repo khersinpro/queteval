@@ -1,0 +1,84 @@
+name: Barracks
+type: military
+unit_type: infantry
+levels:
+  1:
+    cost:
+      wood: 200
+      clay: 170
+      iron: 90
+      crop: 80
+    training_speed: 1.0
+    upgrade_time: 900  # 15 minutes
+  2:
+    cost:
+      wood: 320
+      clay: 280
+      iron: 150
+      crop: 130
+    training_speed: 0.95  # 5% plus rapide
+    upgrade_time: 1800  # 30 minutes
+  3:
+    cost:
+      wood: 510
+      clay: 450
+      iron: 240
+      crop: 210
+    training_speed: 0.90
+    upgrade_time: 3600  # 1 heure
+  4:
+    cost:
+      wood: 820
+      clay: 720
+      iron: 380
+      crop: 340
+    training_speed: 0.85
+    upgrade_time: 7200  # 2 heures
+  5:
+    cost:
+      wood: 1310
+      clay: 1150
+      iron: 610
+      crop: 540
+    training_speed: 0.80
+    upgrade_time: 14400  # 4 heures
+  6:
+    cost:
+      wood: 2100
+      clay: 1840
+      iron: 980
+      crop: 870
+    training_speed: 0.75
+    upgrade_time: 28800  # 8 heures
+  7:
+    cost:
+      wood: 3360
+      clay: 2950
+      iron: 1570
+      crop: 1390
+    training_speed: 0.70
+    upgrade_time: 57600  # 16 heures
+  8:
+    cost:
+      wood: 5380
+      clay: 4720
+      iron: 2510
+      crop: 2230
+    training_speed: 0.65
+    upgrade_time: 115200  # 32 heures
+  9:
+    cost:
+      wood: 8610
+      clay: 7550
+      iron: 4020
+      crop: 3570
+    training_speed: 0.60
+    upgrade_time: 230400  # 64 heures
+  10:
+    cost:
+      wood: 13780
+      clay: 12080
+      iron: 6430
+      crop: 5710
+    training_speed: 0.50  # 50% plus rapide qu'au niveau 1
+    upgrade_time: 460800  # 128 heures (5.33 jours) 

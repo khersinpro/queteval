@@ -1,0 +1,84 @@
+name: Granary
+type: storage
+storage_type: crop
+levels:
+  1:
+    cost:
+      wood: 80
+      clay: 20
+      iron: 0
+      crop: 120
+    capacity: 800
+    upgrade_time: 180  # 3 minutes
+  2:
+    cost:
+      wood: 120
+      clay: 35
+      iron: 40
+      crop: 180
+    capacity: 1400
+    upgrade_time: 360  # 6 minutes
+  3:
+    cost:
+      wood: 180
+      clay: 55
+      iron: 80
+      crop: 260
+    capacity: 2200
+    upgrade_time: 720  # 12 minutes
+  4:
+    cost:
+      wood: 260
+      clay: 85
+      iron: 140
+      crop: 380
+    capacity: 3200
+    upgrade_time: 1440  # 24 minutes
+  5:
+    cost:
+      wood: 380
+      clay: 130
+      iron: 220
+      crop: 550
+    capacity: 4400
+    upgrade_time: 2880  # 48 minutes
+  6:
+    cost:
+      wood: 550
+      clay: 190
+      iron: 320
+      crop: 800
+    capacity: 5800
+    upgrade_time: 5760  # 96 minutes (1h36)
+  7:
+    cost:
+      wood: 800
+      clay: 270
+      iron: 460
+      crop: 1150
+    capacity: 7400
+    upgrade_time: 11520  # 192 minutes (3h12)
+  8:
+    cost:
+      wood: 1150
+      clay: 390
+      iron: 660
+      crop: 1650
+    capacity: 9200
+    upgrade_time: 23040  # 384 minutes (6h24)
+  9:
+    cost:
+      wood: 1650
+      clay: 560
+      iron: 950
+      crop: 2350
+    capacity: 11200
+    upgrade_time: 46080  # 768 minutes (12h48)
+  10:
+    cost:
+      wood: 2350
+      clay: 800
+      iron: 1350
+      crop: 3350
+    capacity: 13400
+    upgrade_time: 92160  # 1536 minutes (25h36)

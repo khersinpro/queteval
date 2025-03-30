@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { MysqlModule } from './mysql/mysql.module';
-import { MongodbModule } from './mongodb/mongodb.module';
+import { MongoModule } from './mongodb/mongodb.module';
 import { UserModule } from './user/user.module';
-// import { AuthModule } from './auth/auth.module';
 import { ConfigModule } from '@nestjs/config';
 import { environment } from './config/environement';
 import { AuthModule } from './auth/auth.module';
+import { VillageModule } from './village/village.module';
+import { GameConfigModule } from './game-config/game-config.module';
 
 @Module({
   imports: [
@@ -14,9 +15,11 @@ import { AuthModule } from './auth/auth.module';
       load: [environment],
     }),
     MysqlModule,
-    MongodbModule,
+    MongoModule,
     UserModule,
     AuthModule,
+    VillageModule,
+    GameConfigModule,
   ],
   controllers: [],
   providers: [],

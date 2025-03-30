@@ -1,0 +1,59 @@
+infantry:
+  pikeman:
+    name: Pikeman
+    type: infantry
+    training_time: 100
+    attack: 10
+    speed: 10
+    population: 1
+    defenses:
+      infantry: 10
+      cavalry: 5
+      magic: 5
+    cost:
+      wood: 100
+      clay: 100
+    requirements:
+      buildings:
+        barrack: 1
+
+  crossbowman:
+    name: Crossbowman
+    type: infantry
+    training_time: 200
+    attack: 35
+    speed: 8
+    population: 2
+    defenses:
+      infantry: 10
+      cavalry: 3
+      magic: 8
+    cost:
+      wood: 150
+      clay: 120
+      iron: 50
+    requirements:
+      buildings:
+        barrack: 3
+  
+cavalry:
+  mounted_sergeant:
+    name: Mounted Sergeant
+    type: cavalry
+    training_time: 230
+    attack: 76
+    speed: 15
+    population: 3
+    defenses:
+      infantry: 10
+      cavalry: 10
+      magic: 10
+    cost:
+      wood: 200
+      clay: 150
+      iron: 100
+    requirements:
+      buildings:
+        stable: 1
+        barrack: 6
+        

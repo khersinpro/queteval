@@ -1,0 +1,93 @@
+name: Headquarters
+type: headquarter
+levels:
+  1:
+    cost:
+      wood: 400
+      clay: 400
+      iron: 400
+      crop: 400
+    population_capacity: 100
+    culture_points: 5
+    upgrade_time: 1800  # 30 minutes
+  2:
+    cost:
+      wood: 800
+      clay: 800
+      iron: 800
+      crop: 800
+    population_capacity: 200
+    culture_points: 8
+    upgrade_time: 3600  # 1 heure
+  3:
+    cost:
+      wood: 1600
+      clay: 1600
+      iron: 1600
+      crop: 1600
+    population_capacity: 400
+    culture_points: 12
+    upgrade_time: 7200  # 2 heures
+  4:
+    cost:
+      wood: 3200
+      clay: 3200
+      iron: 3200
+      crop: 3200
+    population_capacity: 800
+    culture_points: 17
+    upgrade_time: 14400  # 4 heures
+  5:
+    cost:
+      wood: 6400
+      clay: 6400
+      iron: 6400
+      crop: 6400
+    population_capacity: 1600
+    culture_points: 23
+    upgrade_time: 28800  # 8 heures
+  6:
+    cost:
+      wood: 12800
+      clay: 12800
+      iron: 12800
+      crop: 12800
+    population_capacity: 3200
+    culture_points: 30
+    upgrade_time: 57600  # 16 heures
+  7:
+    cost:
+      wood: 25600
+      clay: 25600
+      iron: 25600
+      crop: 25600
+    population_capacity: 6400
+    culture_points: 38
+    upgrade_time: 115200  # 32 heures
+  8:
+    cost:
+      wood: 51200
+      clay: 51200
+      iron: 51200
+      crop: 51200
+    population_capacity: 12800
+    culture_points: 47
+    upgrade_time: 230400  # 64 heures
+  9:
+    cost:
+      wood: 102400
+      clay: 102400
+      iron: 102400
+      crop: 102400
+    population_capacity: 25600
+    culture_points: 57
+    upgrade_time: 460800  # 128 heures (5.33 jours)
+  10:
+    cost:
+      wood: 204800
+      clay: 204800
+      iron: 204800
+      crop: 204800
+    population_capacity: 51200
+    culture_points: 68
+    upgrade_time: 921600  # 256 heures (10.67 jours) 
