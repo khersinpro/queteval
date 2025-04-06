@@ -1,5 +1,5 @@
 import { Injectable, Scope } from '@nestjs/common';
-import { User } from '../user.entity';
+import { User } from '../entity/user.entity';
 
 @Injectable({ scope: Scope.REQUEST })
 export class UserStorage {

@@ -6,8 +6,8 @@ import {
   Param,
   UseGuards,
 } from '@nestjs/common';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { UserService } from './user.service';
+import { UpdateUserDto } from '../dto/update-user.dto';
+import { UserService } from '../service/user.service';
 import {
   ApiTags,
   ApiBearerAuth,

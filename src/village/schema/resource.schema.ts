@@ -14,7 +14,7 @@ export class ResourceInfo {
 
 export const ResourceInfoSchema = SchemaFactory.createForClass(ResourceInfo);
 
-@Schema({ _id: false })
+@Schema()
 export class Resources {
   @Prop({ type: ResourceInfoSchema, required: true })
   wood: ResourceInfo;

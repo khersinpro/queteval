@@ -7,6 +7,11 @@ import { environment } from './config/environement';
 import { AuthModule } from './auth/auth.module';
 import { VillageModule } from './village/village.module';
 import { GameConfigModule } from './game-config/game-config.module';
+import { BuildingModule } from './building/building.module';
+import { GameEventModule } from './game-event/game-event.module';
+import { AttackService } from './attack/controller/attack.service';
+import { AttackModule } from './attack/attack.module';
+import { UnitModule } from './unit/unit.module';
 
 @Module({
   imports: [
@@ -20,8 +25,12 @@ import { GameConfigModule } from './game-config/game-config.module';
     AuthModule,
     VillageModule,
     GameConfigModule,
+    BuildingModule,
+    GameEventModule,
+    AttackModule,
+    UnitModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [AttackService],
 })
 export class AppModule {}

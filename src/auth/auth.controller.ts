@@ -18,7 +18,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CurrentUser } from './decorators/current-user.decorator';
-import { User } from 'src/user/user.entity';
+import { User } from 'src/user/entity/user.entity';
 
 @ApiTags('Authentication')
 @Controller('auth')

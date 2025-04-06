@@ -1,4 +1,4 @@
-import { User } from 'src/user/user.entity';
+import { User } from 'src/user/entity/user.entity';
 import { FastifyRequest } from 'fastify';
 
 export interface AuthenticatedRequest extends FastifyRequest {

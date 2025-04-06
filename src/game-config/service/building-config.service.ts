@@ -2,8 +2,8 @@ import { Injectable, OnModuleInit } from '@nestjs/common';
 import * as yaml from 'js-yaml';
 import * as fs from 'fs';
 import * as path from 'path';
-import { BuildingConfig } from './types/base-building-config';
-import { getAllYamlFiles } from './yaml-utils';
+import { BuildingConfig } from '../types/base-building-config';
+import { getAllYamlFiles } from '../utils/yaml-utils';
 
 @Injectable()
 export class BuildingConfigService implements OnModuleInit {

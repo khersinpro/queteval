@@ -1,7 +1,14 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document, Types } from 'mongoose';
 
-@Schema({ _id: false })
+@Schema()
 export class Building {
+  @Prop({
+    type: Types.ObjectId,
+    default: () => new Types.ObjectId(),
+  })
+  _id: Types.ObjectId;
+
   @Prop({ required: true })
   name: string;
 
@@ -17,5 +24,7 @@ export class Building {
   @Prop({ type: Object })
   metadata?: Record<string, any>;
 }
+
+export type BuildingDocument = Building & Document;
 
 export const BuildingSchema = SchemaFactory.createForClass(Building);

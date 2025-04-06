@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { GameConfigService } from './game-config.service';
-import { BuildingConfigService } from './building-config.service';
+import { GameConfigService } from './service/game-config.service';
+import { BuildingConfigService } from './service/building-config.service';
 
 @Module({
   providers: [GameConfigService, BuildingConfigService],

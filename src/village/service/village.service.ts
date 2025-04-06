@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { VillageRepository } from './village.repository';
-import { Village } from './schema/village.schema';
-import { CreateVillageDto } from './dto/create-village.dto';
-import { User } from 'src/user/user.entity';
+import { VillageRepository } from '../repository/village.repository';
+import { Village } from '../schema/village.schema';
+import { CreateVillageDto } from '../dto/create-village.dto';
+import { User } from 'src/user/entity/user.entity';
 
 @Injectable()
 export class VillageService {
