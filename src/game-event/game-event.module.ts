@@ -8,18 +8,16 @@ import { BuildingModule } from '../building/building.module'; // Potentiellement
 import { UnitModule } from '../unit/unit.module'; // Potentiellement pour scheduleNextUnit
 import { MongooseModule } from '@nestjs/mongoose';
 import {
-  BuildingEventSchema,
+  BuildingEvent,
   GameEvent,
   GameEventSchema,
 } from './schema/game-event.schema';
 import { GameEventType } from './types/event.enum';
 import { GameQueue } from './types/queue-enum';
-import {
-  IJobScheduler,
-  JOB_SCHEDULER,
-} from './interface/job-scheduler.interface';
+import { JOB_SCHEDULER } from './interface/job-scheduler.interface';
 import { BullMqJobSchedulerService } from './service/bullmq-scheduler.service';
 import { GameConfigModule } from 'src/game-config/game-config.module';
+import mongoose from 'mongoose';
 
 // Définit le nom de la queue de manière centralisée
 export const GAME_EVENTS_QUEUE = 'game-events';
@@ -28,22 +26,23 @@ export const GAME_EVENTS_QUEUE = 'game-events';
   imports: [
     MongooseModule.forFeatureAsync([
       {
-        name: GameEvent.name, // <- provider "GameEventModel"
+        name: GameEvent.name, // Le nom du modèle de base
         useFactory: () => {
           const schema = GameEventSchema;
-          // Déclare le discri "BuildingEvent"
-          schema.discriminator('BuildingEvent', BuildingEventSchema);
+          // Enregistrer le discriminateur avec la VALEUR DE L'ENUM
+          // et un NOUVEAU schéma contenant SEULEMENT les champs spécifiques
+          schema.discriminator(
+            GameEventType.BUILDING_COMPLETE,
+            new mongoose.Schema(BuildingEvent),
+          );
+
+          // Enregistrer d'autres discriminateurs ici...
+          // schema.discriminator(GameEventType.UNIT_COMPLETE, new mongoose.Schema(UnitEventSchemaFields));
+
           return schema;
         },
       },
-      {
-        name: 'BuildingEvent',  // <- provider "BuildingEventModel"
-        useFactory: () => {
-          // On peut réutiliser BuildingEventSchema
-          // Astuce: mettre le même .discriminatorKey si besoin
-          return BuildingEventSchema;
-        },
-      },
+      // NE PAS enregistrer BuildingEvent séparément ici !
     ]),
     BullModule.registerQueue({
       name: GAME_EVENTS_QUEUE,

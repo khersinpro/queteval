@@ -59,8 +59,7 @@ export class GameEvent {
 
 export const GameEventSchema = SchemaFactory.createForClass(GameEvent);
 
-@Schema()
-export class BuildingEvent extends GameEvent {
+export class BuildingEvent {
   @Prop({
     type: mongoose.Schema.Types.ObjectId,
     required: true,
@@ -81,4 +80,3 @@ export class BuildingEvent extends GameEvent {
   endTime: Date;
 }
 
-export const BuildingEventSchema = SchemaFactory.createForClass(BuildingEvent);
