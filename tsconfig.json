@@ -16,6 +16,14 @@
     "forceConsistentCasingInFileNames": true,
     "noImplicitAny": false,
     "strictBindCallApply": false,
-    "noFallthroughCasesInSwitch": false
+    "noFallthroughCasesInSwitch": false,
+    "paths": {
+      "@app/game-job-publisher": [
+        "libs/game-job-publisher/src"
+      ],
+      "@app/game-job-publisher/*": [
+        "libs/game-job-publisher/src/*"
+      ]
+    }
   }
 }
