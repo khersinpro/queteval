@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { Queue } from 'bullmq';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Job, Queue } from 'bullmq';
 import { InjectQueue } from '@nestjs/bullmq';
 import { GAME_QUEUES } from '../constant/game_queues.enum';
 import {
@@ -14,12 +14,20 @@ export class BuildingJobPublisherService implements IJobPublisher {
     private readonly buildingQueue: Queue<ScheduledJob['payload']>,
   ) {}
 
-  async scheduleJob(scheduledJob: ScheduledJob): Promise<void> {
-    await this.buildingQueue.add(
+  async scheduleJob(scheduledJob: ScheduledJob): Promise<string> {
+    const job = await this.buildingQueue.add(
       scheduledJob.job_type,
       scheduledJob.payload,
       scheduledJob.options,
     );
+
+    if (!job || !job.id) {
+      throw new InternalServerErrorException(
+        'Erreur serveur lors de la création de la tâche.',
+      );
+    }
+
+    return job.id;
   }
 
   async removeJob(scheduledJobId: string): Promise<void> {

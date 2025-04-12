@@ -26,7 +26,7 @@ export interface IJobPublisher {
    * @description Ajoute un job à la queue
    * @param scheduledJob Le job à publier
    */
-  scheduleJob(scheduledJob: ScheduledJob): Promise<void>;
+  scheduleJob(scheduledJob: ScheduledJob): Promise<string>;
 
   /**
    * @description Supprime un job de la queue

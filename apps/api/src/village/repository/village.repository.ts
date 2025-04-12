@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { MongoRepository } from 'typeorm';
+import {
+  Document,
+  MongoRepository,
+  ObjectLiteral,
+  UpdateFilter,
+  UpdateOptions,
+  UpdateResult,
+} from 'typeorm';
 import { ObjectId } from 'mongodb';
 import { Village } from '../document/village.document';
 import { DeepPartial } from 'typeorm';
@@ -104,5 +111,20 @@ export class VillageRepository {
 
   async findByUserId(userId: number): Promise<Village[]> {
     return this.villageRepository.find({ where: { userId: userId } });
+  }
+
+  /**
+   * Exécute une opération updateOne native de MongoDB via le repository injecté.
+   * @param filter Le filtre pour trouver le(s) document(s) à mettre à jour.
+   * @param update L'opération de mise à jour (ex: { $set: { ... } }).
+   * @param options Options natives du driver MongoDB (optionnel).
+   * @returns Promise<UpdateResult> Le résultat de l'opération du driver MongoDB.
+   */
+  async updateOne(
+    filter: ObjectLiteral,
+    update: UpdateFilter<Document>,
+    options?: UpdateOptions,
+  ): Promise<Document | UpdateResult> {
+    return await this.villageRepository.updateOne(filter, update, options);
   }
 }

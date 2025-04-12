@@ -21,10 +21,10 @@ export class ConstructionQueueItem {
   endTime: Date;
 
   @Column({ nullable: false }) // Stocke l'ID, pas de 'ref' direct
-  gameEventId: ObjectId;
+  buildingJobId: ObjectId;
 
   @Column({ type: 'string', nullable: true })
-  jobId?: string; // Lien vers un job BullMQ par exemple
+  queuedJobId?: string; // Lien vers un job BullMQ par exemple
 
   // Créer le champ 'queuedAt' au lieu de 'createdAt'
   @CreateDateColumn({ name: 'queuedAt', type: 'timestamp' })
