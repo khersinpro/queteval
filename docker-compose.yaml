@@ -27,6 +27,7 @@ services:
     environment:
       - MONGO_INITDB_ROOT_USERNAME=mongouser
       - MONGO_INITDB_ROOT_PASSWORD=mongopassword
+    command: mongod --replSet rs0 --bind_ip_all
 
   mongo-express:
     image: mongo-express

@@ -1,361 +1,257 @@
 // import {
-//   BadRequestException,
-//   forwardRef,
-//   Inject,
-//   Injectable,
-//   InternalServerErrorException,
-//   Logger,
-//   NotFoundException,
-// } from '@nestjs/common';
-// import { InjectModel } from '@nestjs/mongoose';
-// import { Model, Types } from 'mongoose';
-// import { Village } from '../../village/schema/village.schema';
-// import { BuildingConfigService } from '../../game-config/service/building-config.service';
-// import {
-//   IJobScheduler,
-//   JOB_SCHEDULER,
-// } from '../../game-event/interface/job-scheduler.interface';
-// import {
-//   GameEvent,
-//   GameEventDocument,
-// } from 'src/game-event/schema/game-event.schema';
-// import { ConstructionQueueItem } from 'src/village/schema/construction-queue.schema';
-// import { GameEventType } from 'src/game-event/types/event.enum';
-// import { Building } from 'src/village/schema/building.schema';
-// import { GameEventStatus } from 'src/game-event/types/game-event-status.enum';
-// import {
-//   ResourceLevelConfig,
-//   StorageLevelConfig,
-// } from 'src/game-config/types/base-building-config';
-
-// const MAX_CONSTRUCTION_SLOTS = 3;
-
-// @Injectable()
-// export class BuildingService {
-//   private readonly logger = new Logger(BuildingService.name);
-
-//   constructor(
-//     @InjectModel(Village.name) private villageModel: Model<VillageDocument>,
-//     @InjectModel(GameEvent.name)
-//     private gameEventModel: Model<GameEventDocument>,
-//     @Inject(JOB_SCHEDULER) private jobScheduler: IJobScheduler,
-//     @Inject(forwardRef(() => BuildingConfigService))
-//     private buildingConfigService: BuildingConfigService,
-//   ) {}
-
-//   private hasSufficientResources(
-//     village: VillageDocument,
-//     cost: { wood: number; clay: number; iron: number; crop: number },
-//   ): boolean {
-//     return (
-//       village.resources.wood.current >= cost.wood &&
-//       village.resources.clay.current >= cost.clay &&
-//       village.resources.iron.current >= cost.iron &&
-//       village.resources.crop.current >= cost.crop
-//     );
+//     BadRequestException,
+//     Inject,
+//     Injectable,
+//     InternalServerErrorException,
+//     Logger,
+//     NotFoundException,
+//   } from '@nestjs/common';
+//   import { VillageRepository } from '../../village/repository/village.repository';
+//   import { VillageService } from '../../village/service/village.service';
+//   import { BuildingConfigService } from '../../game-config/service/building-config.service';
+//   import { Village } from '../../village/document/village.schema';
+//   import { Building } from '../../village/document/embedded/building.schema';
+//   import { ConstructionQueueItem } from '../../village/document/embedded/construction-queue-item.schema';
+//   import {
+//     BUILDING_JOB_PUBLISHER,
+//     IJobPublisher,
+//   } from '@app/game-job-publisher/interface/job-publisher.interface';
+//   import { BuildingJob } from '@app/game-job-publisher/document/building-job.schema';
+//   import { GAME_JOB_STATUS } from '@app/game-job-publisher/constant/game-job-status.enum';
+//   import { GAME_JOB_TYPES } from '@app/game-job-publisher/constant/game-job-types.enum';
+//   import { BuildingJobService } from '@app/game-job-publisher/service/building-job.service';
+//   import { DataSource, EntityManager } from 'typeorm';
+//   import { InjectDataSource } from '@nestjs/typeorm';
+  
+//   const MAX_CONSTRUCTION_SLOTS = 3;
+  
+//   interface StartConstructionTransactionResult {
+//     villageSavedState: Village;
+//     savedBuildingJob: BuildingJob;
+//     addedQueueItemData: ConstructionQueueItem; // L'instance ajoutée à la queue
 //   }
-
-//   private deductResources(
-//     village: VillageDocument,
-//     cost: { wood: number; clay: number; iron: number; crop: number },
-//   ): void {
-//     village.resources.wood.current -= cost.wood;
-//     village.resources.clay.current -= cost.clay;
-//     village.resources.iron.current -= cost.iron;
-//     village.resources.crop.current -= cost.crop;
-//     // Marquer comme modifié si on n'utilise pas directement save() sur le document racine après
-//     village.markModified('resources');
-//   }
-
-//   // --- scheduleCompletionJob (inchangé) ---
-//   private async scheduleCompletionJob(
-//     villageId: string,
-//     queueItem: ConstructionQueueItem,
-//   ): Promise<string | undefined> {
-//     const delay = queueItem.endTime.getTime() - Date.now();
-//     const jobId = `building-${villageId}-${queueItem.buildingInstanceId.toString()}-${queueItem.targetLevel}`;
-
-//     await this.jobScheduler.scheduleJob(
-//       GameEventType.BUILDING_COMPLETE,
-//       {
-//         villageId: villageId,
-//         buildingInstanceId: queueItem.buildingInstanceId.toString(),
-//         targetLevel: queueItem.targetLevel,
-//         gameEventId: queueItem.gameEventId.toString(),
-//       },
-//       {
-//         delay: delay > 0 ? delay : 0,
-//         jobId: jobId,
-//         removeOnComplete: true,
-//         removeOnFail: { age: 24 * 3600 },
-//       },
-//     );
-//     return jobId;
-//   }
-
-//   // --- Méthodes Principales (SANS sessions/transactions) ---
-
-//   async startConstruction(
-//     villageId: string,
-//     buildingName: string,
-//   ): Promise<VillageDocument> {
-//     this.logger.log(
-//       `[Village: ${villageId}] Tentative construction: ${buildingName}`,
-//     );
-//     const village = await this.villageModel.findById(villageId).exec();
-
-//     if (!village)
-//       throw new NotFoundException(`Village ${villageId} non trouvé.`);
-
-//     if (village.constructionQueue.length >= MAX_CONSTRUCTION_SLOTS) {
-//       throw new BadRequestException(
-//         `Limite de ${MAX_CONSTRUCTION_SLOTS} constructions atteinte.`,
+  
+//   @Injectable()
+//   export class BuildingService {
+//     private readonly logger = new Logger(BuildingService.name);
+//     constructor(
+//       private readonly villageRepository: VillageRepository,
+//       private readonly villageService: VillageService,
+//       private readonly buildingConfigService: BuildingConfigService,
+//       @Inject(BUILDING_JOB_PUBLISHER)
+//       private readonly buildingJobPublisher: IJobPublisher,
+//       private buildingJobService: BuildingJobService,
+//       @InjectDataSource('mongodb')
+//       private readonly dataSource: DataSource,
+//     ) {}
+  
+//     private hasSufficientResources(
+//       village: Village,
+//       cost: { wood: number; clay: number; iron: number; crop: number },
+//     ): boolean {
+//       return (
+//         village.resources.wood.current >= cost.wood &&
+//         village.resources.clay.current >= cost.clay &&
+//         village.resources.iron.current >= cost.iron &&
+//         village.resources.crop.current >= cost.crop
 //       );
 //     }
-
-//     const buildingConfig =
-//       this.buildingConfigService.getBuildingConfig(buildingName);
-
-//     if (!buildingConfig)
-//       throw new NotFoundException(`Config pour '${buildingName}' introuvable.`);
-
-//     const targetLevel = 1;
-//     const levelConfig = this.buildingConfigService.getBuildingLevelConfig(
-//       buildingName,
-//       targetLevel,
-//     );
-
-//     if (!this.hasSufficientResources(village, levelConfig.cost)) {
-//       throw new BadRequestException('Ressources insuffisantes.');
+  
+//     private deductResources(
+//       village: Village,
+//       cost: { wood: number; clay: number; iron: number; crop: number },
+//     ): void {
+//       village.resources.wood.current -= cost.wood;
+//       village.resources.clay.current -= cost.clay;
+//       village.resources.iron.current -= cost.iron;
+//       village.resources.crop.current -= cost.crop;
 //     }
-
-//     const startTime = new Date();
-//     const endTime = new Date(
-//       startTime.getTime() + levelConfig.upgrade_time * 1000,
-//     );
-
-//     const newBuildingInstanceId = new Types.ObjectId();
-//     let savedEvent: GameEventDocument | null = null;
-//     let addedQueueItemData: ConstructionQueueItem | null = null;
-
-//     try {
-//       this.deductResources(village, levelConfig.cost);
-
-//       const newBuilding = new Building();
-//       newBuilding._id = newBuildingInstanceId;
-//       newBuilding.name = buildingName;
-//       newBuilding.type = buildingConfig.type;
-//       newBuilding.level = 0;
-
-//       village.buildings.push(newBuilding);
-//       village.markModified('buildings');
-
-//       savedEvent = await this.gameEventModel.create({
-//         eventType: GameEventType.BUILDING_COMPLETE,
-//         status: GameEventStatus.SCHEDULED,
-//         originVillageId: village._id.toString(),
-//         startTime: startTime,
-//         endTime: endTime,
-//         buildingInstanceId: newBuildingInstanceId,
-//         targetLevel: targetLevel,
-//       });
-
-//       const gameEventId = savedEvent._id;
-
-//       addedQueueItemData = new ConstructionQueueItem();
-//       addedQueueItemData._id = gameEventId;
-//       addedQueueItemData.buildingInstanceId = newBuildingInstanceId;
-//       addedQueueItemData.buildingName = buildingName;
-//       addedQueueItemData.targetLevel = targetLevel;
-//       addedQueueItemData.startTime = startTime;
-//       addedQueueItemData.endTime = endTime;
-//       addedQueueItemData.gameEventId = gameEventId;
-
-//       village.constructionQueue.push(addedQueueItemData);
-//       village.markModified('constructionQueue');
-
-//       // Sauvegarder le village avec TOUS les changements d'un coup
-//       await village.save();
+  
+//     async startConstruction(
+//       villageId: string,
+//       buildingName: string,
+//     ): Promise<Village> {
 //       this.logger.log(
-//         `[Village: ${villageId}] Construction ${buildingName} Lvl ${targetLevel} ajoutée.`,
+//         `[Village: ${villageId}] Tentative construction: ${buildingName}`,
 //       );
-//     } catch (error) {
-//       // Erreur pendant les opérations BDD
-//       this.logger.error(
-//         `[Village: ${villageId}] Erreur BDD startConstruction: ${error instanceof Error ? error.message : String(error)}`,
-//         error instanceof Error ? error.stack : undefined,
-//       );
-//       // Note: L'état peut être incohérent ici (ex: event créé mais village non sauvegardé)
-//       throw new InternalServerErrorException(
-//         'Erreur serveur lors de la mise à jour du village.',
-//       );
-//     }
-
-//     // Planifier la tâche (opération externe à la BDD)
-
-//     // Utiliser les données qu'on avait préparées
-//     const queueItemToSchedule = addedQueueItemData;
-//     const jobId = await this.scheduleCompletionJob(
-//       village._id.toString(),
-//       queueItemToSchedule,
-//     );
-//     // Mettre à jour le jobId dans l'item de queue (opération BDD séparée)
-//     if (jobId) {
-//       await this.villageModel
-//         .updateOne(
-//           {
-//             _id: village._id,
-//             'constructionQueue._id': queueItemToSchedule._id,
-//           },
-//           { $set: { 'constructionQueue.$.jobId': jobId } },
-//         )
-//         .exec();
-//     }
-
-//     // A modifier
-//     return this.villageModel
-//       .findById(villageId)
-//       .exec()
-//       .then((village) => {
-//         if (!village) {
-//           throw new NotFoundException(`Village ${villageId} non trouvé.`);
-//         }
-//         return village;
-//       });
-//   }
-
-//   async startUpgrade(
-//     villageId: string,
-//     buildingInstanceId: string,
-//   ): Promise<Village> {
-//     this.logger.log(
-//       `[Village: ${villageId}] Tentative amélioration: ${buildingInstanceId}`,
-//     );
-//     const village = await this.villageModel.findById(villageId).exec();
-//     if (!village)
-//       throw new NotFoundException(`Village ${villageId} non trouvé.`);
-
-//     if (village.constructionQueue.length >= MAX_CONSTRUCTION_SLOTS) {
-//       throw new BadRequestException(
-//         `Limite de construction (${MAX_CONSTRUCTION_SLOTS}) atteinte.`,
-//       );
-//     }
-//     const building = village.buildings.find(
-//       (b) => b._id.toString() === buildingInstanceId,
-//     );
-
-//     if (!building)
-//       throw new NotFoundException(`Bâtiment ${buildingInstanceId} non trouvé.`);
-//     if (
-//       village.constructionQueue.some((item) =>
-//         item.buildingInstanceId.equals(building._id),
-//       )
-//     ) {
-//       throw new BadRequestException(
-//         'Une amélioration est en cours pour ce bâtiment.',
-//       );
-//     }
-
-//     const currentLevel = building.level;
-//     const targetLevel = currentLevel + 1;
-//     let levelConfig: ResourceLevelConfig | StorageLevelConfig | null = null;
-//     try {
-//       levelConfig = this.buildingConfigService.getBuildingLevelConfig(
-//         building.name,
+  
+//       const village = await this.villageRepository.findById(villageId);
+  
+//       if (!village)
+//         throw new NotFoundException(`Village ${villageId} non trouvé.`);
+  
+//       // Logique de vérification métier inchangée
+//       if (village.constructionQueue.length >= MAX_CONSTRUCTION_SLOTS) {
+//         throw new BadRequestException(
+//           `Limite de ${MAX_CONSTRUCTION_SLOTS} constructions atteinte.`,
+//         );
+//       }
+  
+//       const buildingConfig =
+//         this.buildingConfigService.getBuildingConfig(buildingName);
+  
+//       if (!buildingConfig)
+//         throw new NotFoundException(`Config pour '${buildingName}' introuvable.`);
+  
+//       const targetLevel = 1;
+//       const levelConfig = this.buildingConfigService.getBuildingLevelConfig(
+//         buildingName,
 //         targetLevel,
 //       );
-//     } catch (error) {
-//       console.error(error);
-//       throw new BadRequestException(
-//         `Niveau ${targetLevel} introuvable pour ${building.name}`,
+  
+//       if (!this.hasSufficientResources(village, levelConfig.cost)) {
+//         throw new BadRequestException('Ressources insuffisantes.');
+//       }
+  
+//       // Logique de temps inchangée
+//       const startTime = new Date();
+//       const endTime = new Date(
+//         startTime.getTime() + levelConfig.upgrade_time * 1000,
 //       );
-//     }
-
-//     if (!this.hasSufficientResources(village, levelConfig.cost))
-//       throw new BadRequestException('Ressources insuffisantes.');
-
-//     const startTime = new Date();
-//     const endTime = new Date(
-//       startTime.getTime() + levelConfig.upgrade_time * 1000,
-//     );
-
-//     let savedEvent: GameEventDocument | null = null;
-//     let addedQueueItemData: any = null;
-
-//     try {
-//       // Préparer les changements
-//       this.deductResources(village, levelConfig.cost);
-
-//       // Créer l'event persistant
-//       savedEvent = await this.gameEventModel.create({
-//         eventType: GameEventType.BUILDING_COMPLETE,
-//         status: GameEventStatus.SCHEDULED,
-//         originVillageId: village._id,
-//         startTime: startTime,
-//         endTime: endTime,
-//         buildingInstanceId: building._id,
-//         targetLevel: targetLevel,
-//       });
-
-//       // Créer l'item de queue
-//       addedQueueItemData = {
-//         _id: new Types.ObjectId(),
-//         buildingInstanceId: building._id,
-//         buildingName: building.name,
-//         targetLevel: targetLevel,
-//         startTime: startTime,
-//         endTime: endTime,
-//         gameEventId: savedEvent._id,
-//       };
-
-//       village.constructionQueue.push(
-//         addedQueueItemData as ConstructionQueueItem,
-//       );
-
-//       village.markModified('constructionQueue');
-
-//       await village.save();
-//       this.logger.log(
-//         `[Village: ${villageId}] Amélioration ${building.name} Lvl ${targetLevel} ajoutée. Event: ${savedEvent._id.toString()}`,
-//       );
-//     } catch (error) {
-//       this.logger.error(
-//         `[Village: ${villageId}] Erreur BDD startUpgrade: ${error instanceof Error ? error.message : String(error)}`,
-//         error instanceof Error ? error.stack : undefined,
-//       );
-//       throw new InternalServerErrorException(
-//         'Erreur serveur lors de la mise à jour du village.',
-//       );
-//     }
-
-//     // Planifier la tâche
-//     const queueItemToSchedule = addedQueueItemData as ConstructionQueueItem;
-
-//     const jobId = await this.scheduleCompletionJob(
-//       village._id.toString(),
-//       queueItemToSchedule,
-//     );
-//     if (jobId) {
-//       await this.villageModel
-//         .updateOne(
-//           {
-//             _id: village._id,
-//             'constructionQueue._id': queueItemToSchedule._id,
-//           },
-//           { $set: { 'constructionQueue.$.jobId': jobId } },
+  
+//       let txResult: StartConstructionTransactionResult; // Variable pour stocker le résultat
+  
+//       try {
+//         // Assigner le résultat de la transaction
+//         txResult =
+//           await this.dataSource.transaction<StartConstructionTransactionResult>(
+//             async (entityManager: EntityManager) => {
+//               const villageInTx = await entityManager.findOneBy(Village, {
+//                 _id: village._id,
+//               });
+//               if (!villageInTx)
+//                 throw new NotFoundException(
+//                   `Village ${villageId} disparu pendant la transaction.`,
+//                 );
+  
+//               this.deductResources(villageInTx, levelConfig.cost);
+  
+//               const newBuilding = new Building();
+//               newBuilding.name = buildingName;
+//               newBuilding.type = buildingConfig.type;
+//               newBuilding.level = 0;
+//               const newBuildingInstanceId = newBuilding._id;
+  
+//               const buildingJobData = entityManager.create(BuildingJob, {
+//                 buildingInstanceId: newBuildingInstanceId,
+//                 originVillageId: villageInTx._id,
+//                 targetLevel: targetLevel,
+//                 startTime: startTime,
+//                 endTime: endTime,
+//                 status: GAME_JOB_STATUS.SCHEDULED,
+//               });
+//               const savedJob = await entityManager.save(
+//                 BuildingJob,
+//                 buildingJobData,
+//               ); // Sauvegarder le job
+  
+//               const queueItemData = new ConstructionQueueItem();
+//               queueItemData.buildingInstanceId = newBuildingInstanceId;
+//               queueItemData.buildingName = buildingName;
+//               queueItemData.targetLevel = targetLevel;
+//               queueItemData.startTime = startTime;
+//               queueItemData.endTime = endTime;
+//               queueItemData.buildingJobId = savedJob._id; // Utiliser l'ID du job sauvegardé
+  
+//               villageInTx.buildings.push(newBuilding);
+//               villageInTx.constructionQueue.push(queueItemData); // Ajouter l'instance
+  
+//               const savedVillage = await entityManager.save(Village, villageInTx); // Sauvegarder le village
+  
+//               // ** RETOURNER les objets nécessaires depuis le callback **
+//               return {
+//                 villageSavedState: savedVillage,
+//                 savedBuildingJob: savedJob,
+//                 addedQueueItemData: queueItemData, // Retourner l'instance ajoutée
+//               };
+//             }, // Fin du callback
+//           ); // Fin de l'appel à transaction
+//       } catch (error: unknown) {
+//         this.logger.error(
+//           `[Village: ${villageId}] Transaction startConstruction échouée`,
+//         );
+//         if (
+//           error instanceof NotFoundException ||
+//           error instanceof BadRequestException
 //         )
-//         .exec();
+//           throw error;
+//         throw new InternalServerErrorException(
+//           'Erreur serveur pendant la transaction.',
+//         );
+//       }
+  
+//       // --- Suite des opérations (txResult est défini et correctement typé ici) ---
+//       // Pas besoin de vérifier si txResult est null, car une erreur aurait été levée
+  
+//       const { villageSavedState, savedBuildingJob, addedQueueItemData } =
+//         txResult;
+//       const buildingJobId = savedBuildingJob._id.toString();
+//       const queueItemId = addedQueueItemData._id; // Récupérer l'ID de l'item de queue
+  
+//       // 2. Planifier le job BullMQ
+//       let jobId: string | undefined;
+//       try {
+//         jobId = await this.buildingJobPublisher.scheduleJob({
+//           job_type: GAME_JOB_TYPES.BUILDING_JOB,
+//           payload: { database_job_id: buildingJobId },
+//           options: {
+//             delay: Math.max(0, endTime.getTime() - Date.now()),
+//             removeOnComplete: true,
+//             removeOnFail: { age: 24 * 3600 },
+//           },
+//         });
+//       } catch (scheduleError) {
+//         this.logger.error(
+//           `[Village: ${villageId}] Échec planification job ${buildingJobId}: ${scheduleError}`,
+//         );
+//         // COMPENSATION
+//         await this.buildingJobService.update(buildingJobId, {
+//           status: GAME_JOB_STATUS.FAILED,
+//         });
+//         // await this.villageRepository.updateOne(
+//         //   { _id: villageSavedState._id },
+//         //   { $pull: { constructionQueue: { _id: queueItemId } } }, // Utiliser l'ID récupéré
+//         // );
+//         // ... autres compensations ...
+//         throw new InternalServerErrorException(
+//           'La construction a été enregistrée mais sa planification a échoué.',
+//         );
+//       }
+  
+//       // 3. Mettre à jour les jobIds
+//       if (jobId) {
+//         try {
+//           const updateVillageResult = await this.villageRepository.updateOne(
+//             { _id: villageSavedState._id, 'constructionQueue._id': queueItemId }, // Utiliser l'ID récupéré
+//             { $set: { 'constructionQueue.$.jobId': jobId } },
+//           );
+//           const updateJobResult = await this.buildingJobService.update(
+//             buildingJobId,
+//             { queuedJobId: jobId },
+//           );
+  
+//           if (updateVillageResult.affected > 0 && updateJobResult) {
+//             this.logger.log(
+//               `[Village: ${villageId}] JobId ${jobId} enregistré pour item ${queueItemId.toString()} et job ${buildingJobId}`,
+//             );
+//           } else {
+//             this.logger.warn(
+//               `[Village: ${villageId}] JobId ${jobId} non (entièrement) enregistré pour item ${queueItemId.toString()}/job ${buildingJobId}.`,
+//             );
+//           }
+//         } catch (updateError) {
+//           this.logger.error(
+//             `[Village: ${villageId}] Erreur BDD updateJobId: ${updateError instanceof Error ? updateError.message : String(updateError)}`,
+//             updateError instanceof Error ? updateError.stack : undefined,
+//           );
+//         }
+//       }
+  
+//       // 4. Retourner l'état final
+//       // findById est plus sûr pour avoir l'état le plus à jour possible après les MAJ jobId hors transaction.
+//       return (
+//         (await this.villageRepository.findById(villageId)) ?? villageSavedState
+//       );
 //     }
-
-//     return this.villageModel
-//       .findById(village._id)
-//       .exec()
-//       .then((village) => {
-//         if (!village)
-//           throw new NotFoundException(`Village ${villageId} non trouvé.`);
-//         return village;
-//       });
 //   }
-
-//   // TODO: cancelBuildingTask(...) reste à implémenter
-// }
+  

@@ -12,6 +12,7 @@ import { AttackService } from './attack/controller/attack.service';
 import { AttackModule } from './attack/attack.module';
 import { UnitModule } from './unit/unit.module';
 import { BullModule } from '@nestjs/bullmq';
+import { GameJobPublisherModule } from '@app/game-job-publisher';
 
 @Module({
   imports: [

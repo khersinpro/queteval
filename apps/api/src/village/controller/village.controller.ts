@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { VillageService } from '../service/village.service';
-import { Village } from '../document/village.document';
+import { Village } from '../document/village.schema';
 import { CreateVillageDto } from '../dto/create-village.dto';
 import { JwtAuthGuard } from '../../auth/guard/jwt-auth.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -22,7 +22,7 @@ export class VillageController {
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  // @Roles('ADMIN')
   async createVillage(
     @Body() data: CreateVillageDto,
     @CurrentUser() user: User,

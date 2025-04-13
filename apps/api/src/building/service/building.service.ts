@@ -6,37 +6,53 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+// Importer les dépendances Mongoose/NestJS
+import { InjectConnection } from '@nestjs/mongoose';
+import { Connection, Types } from 'mongoose'; // Importer Connection Mongoose
+// Importer les repositories/services adaptés à Mongoose
 import { VillageRepository } from '../../village/repository/village.repository';
-import { VillageService } from '../../village/service/village.service';
+// import { VillageService } from '../../village/service/village.service'; // <- À évaluer si encore utile
 import { BuildingConfigService } from '../../game-config/service/building-config.service';
-import { Village } from '../../village/document/village.document';
-import { Building } from '../../village/document/embbeded/building.document';
-import { ConstructionQueueItem } from '../../village/document/embbeded/construction-queue.document';
+import {
+  Village,
+  VillageDocument,
+} from '../../village/document/village.schema'; // Doc Mongoose
+import { ConstructionQueueItem } from '../../village/document/embedded/construction-queue-item.schema'; // Schéma Mongoose
 import {
   BUILDING_JOB_PUBLISHER,
   IJobPublisher,
 } from '@app/game-job-publisher/interface/job-publisher.interface';
-import { BuildingJob } from '@app/game-job-publisher/document/building-job.document';
+import {
+  BuildingJob,
+  BuildingJobDocument,
+} from '@app/game-job-publisher/document/building-job.schema'; // Doc Mongoose
 import { GAME_JOB_STATUS } from '@app/game-job-publisher/constant/game-job-status.enum';
 import { GAME_JOB_TYPES } from '@app/game-job-publisher/constant/game-job-types.enum';
-import { BuildingJobService } from '@app/game-job-publisher/service/building-job.service';
-import { DataSource } from 'typeorm';
-import { InjectDataSource } from '@nestjs/typeorm';
+import { BuildingJobService } from '@app/game-job-publisher/service/building-job.service'; // Service Mongoose
+import { ObjectId } from 'mongodb';
+import { Type } from 'class-transformer';
 
 const MAX_CONSTRUCTION_SLOTS = 3;
+
+interface StartConstructionTransactionResult {
+  savedBuildingJob: BuildingJobDocument;
+  addedQueueItem: ConstructionQueueItem; // L'instance ajoutée (avec son ID)
+  villageId: ObjectId; // Pour référence post-transaction
+  // Pas besoin de retourner villageSavedState si on re-fetch à la fin
+}
 
 @Injectable()
 export class BuildingService {
   private readonly logger = new Logger(BuildingService.name);
   constructor(
+    // Injecter les repositories/services adaptés à Mongoose
     private readonly villageRepository: VillageRepository,
-    private readonly villageService: VillageService,
+    // private readonly villageService: VillageService, // Evaluer si nécessaire
     private readonly buildingConfigService: BuildingConfigService,
     @Inject(BUILDING_JOB_PUBLISHER)
     private readonly buildingJobPublisher: IJobPublisher,
-    private buildingJobService: BuildingJobService,
-    @InjectDataSource('mongodb')
-    private readonly dataSource: DataSource,
+    private readonly buildingJobService: BuildingJobService, // S'assurer qu'il utilise Mongoose
+    @InjectConnection() private readonly connection: Connection, // Injecter la connexion Mongoose
   ) {}
 
   private hasSufficientResources(
@@ -64,186 +80,220 @@ export class BuildingService {
   async startConstruction(
     villageId: string,
     buildingName: string,
-  ): Promise<Village> {
+  ): Promise<VillageDocument> {
+    // Retourne un Document Mongoose
     this.logger.log(
       `[Village: ${villageId}] Tentative construction: ${buildingName}`,
     );
 
-    const village = await this.villageRepository.findById(villageId);
-
-    if (!village)
+    // --- Vérifications initiales (hors transaction) ---
+    const initialVillage = await this.villageRepository.findById(villageId);
+    if (!initialVillage)
       throw new NotFoundException(`Village ${villageId} non trouvé.`);
-
-    // Logique de vérification métier inchangée
-    if (village.constructionQueue.length >= MAX_CONSTRUCTION_SLOTS) {
-      throw new BadRequestException(
-        `Limite de ${MAX_CONSTRUCTION_SLOTS} constructions atteinte.`,
-      );
-    }
-
+    if (initialVillage.constructionQueue.length >= MAX_CONSTRUCTION_SLOTS)
+      throw new BadRequestException(/* ... */);
     const buildingConfig =
       this.buildingConfigService.getBuildingConfig(buildingName);
-
-    if (!buildingConfig)
-      throw new NotFoundException(`Config pour '${buildingName}' introuvable.`);
-
+    if (!buildingConfig) throw new NotFoundException(/* ... */);
     const targetLevel = 1;
     const levelConfig = this.buildingConfigService.getBuildingLevelConfig(
       buildingName,
       targetLevel,
     );
+    if (!this.hasSufficientResources(initialVillage, levelConfig.cost))
+      throw new BadRequestException(/* ... */);
 
-    if (!this.hasSufficientResources(village, levelConfig.cost)) {
-      throw new BadRequestException('Ressources insuffisantes.');
-    }
-
-    // Logique de temps inchangée
     const startTime = new Date();
     const endTime = new Date(
       startTime.getTime() + levelConfig.upgrade_time * 1000,
     );
 
-    const newBuilding = new Building();
-    newBuilding.name = buildingName;
-    newBuilding.type = buildingConfig.type;
-    newBuilding.level = 0;
-
-    const newBuildingInstanceId = newBuilding._id; // Récupérer l'ID généré
-
-    let buildingJob: BuildingJob | null = null;
-    let addedQueueItemData: ConstructionQueueItem | null = null;
-
+    // --- Transaction Mongoose ---
+    const session = await this.connection.startSession(); // Démarrer une session
+    let txResult: StartConstructionTransactionResult | null = null;
     try {
-      // Appliquer les changements sur l'objet village
-      this.deductResources(village, levelConfig.cost);
-      village.buildings.push(newBuilding); // Ajouter le nouveau bâtiment
+      txResult =
+        await session.withTransaction<StartConstructionTransactionResult>(
+          async (sess) => {
+            // --- Début du callback ---
+            console.log('Session started');
+            // 1. Créer BuildingJob
+            const buildingJobData: Partial<BuildingJob> = {
+              buildingInstanceId: new Types.ObjectId(),
+              originVillageId: initialVillage._id,
+              targetLevel: 1, // targetLevel = 1 pour nouvelle construction
+              startTime: startTime,
+              endTime: endTime,
+              status: GAME_JOB_STATUS.SCHEDULED,
+              JobType: GAME_JOB_TYPES.BUILDING_JOB,
+            };
+            console.log('BuildingJob created');
+            // Utiliser une variable locale pour le job sauvegardé
+            const savedJob = await this.buildingJobService.create(
+              buildingJobData,
+              { session: sess },
+            );
+            console.log('BuildingJob saved');
+            const newBuildingInstanceId = savedJob.buildingInstanceId;
+            console.log('BuildingJob saved');
+            // 2. Préparer embedded docs
+            const newBuildingData = {
+              // Utiliser objet simple pour $push
+              _id: newBuildingInstanceId,
+              name: buildingName,
+              type: buildingConfig.type,
+              level: 0,
+            };
 
-      // // Créer et sauvegarder l'événement associé via son repository
-      // const eventData = this.gameEventRepository.createInstance({
-      //   // Utiliser le repo GameEvent
-      //   eventType: GameEventType.BUILDING_COMPLETE, // Assurez-vous que l'enum est correct
-      //   status: GameEventStatus.SCHEDULED,
-      //   originVillageId: village._id, // Utiliser l'ObjectId
-      //   startTime: startTime,
-      //   endTime: endTime,
-      //   // Spécifique à l'event de construction/upgrade si défini dans GameEvent ou ses enfants
-      //   buildingInstanceId: newBuildingInstanceId,
-      //   targetLevel: targetLevel,
-      // });
-      // savedEvent = await this.gameEventRepository.save(eventData);
+            const queueItem = new ConstructionQueueItem(); // Le constructeur initialise _id
+            queueItem._id = new Types.ObjectId();
+            queueItem.buildingInstanceId = newBuildingInstanceId;
+            queueItem.buildingName = buildingName;
+            queueItem.targetLevel = 1; // targetLevel = 1
+            queueItem.startTime = startTime;
+            queueItem.endTime = endTime;
+            queueItem.buildingJobId = savedJob._id;
+            // queuedAt est géré par le schéma
 
-      // const gameEventId = savedEvent._id; // Récupérer l'ObjectId de l'event sauvegardé
+            // 3. Update Village atomique
+            const villageUpdateResult = await this.villageRepository.updateOne(
+              { _id: initialVillage._id },
+              {
+                $inc: {
+                  'resources.wood.current': -levelConfig.cost.wood,
+                  'resources.clay.current': -levelConfig.cost.clay,
+                  'resources.iron.current': -levelConfig.cost.iron,
+                  'resources.crop.current': -levelConfig.cost.crop,
+                },
+                $push: {
+                  buildings: newBuildingData, // Passer l'objet simple
+                  constructionQueue: queueItem, // Passer l'instance (Mongoose l'extrait)
+                },
+              },
+              { session: sess }, // Utiliser les options de la méthode updateOne du repo
+            );
 
-      // Création du job de construction
-      buildingJob = new BuildingJob();
-      buildingJob.buildingInstanceId = newBuildingInstanceId;
-      buildingJob.originVillageId = village._id;
-      buildingJob.targetLevel = targetLevel;
-      buildingJob.startTime = startTime;
-      buildingJob.endTime = endTime;
-      buildingJob.status = GAME_JOB_STATUS.SCHEDULED;
+            if (villageUpdateResult.matchedCount === 0)
+              throw new NotFoundException(/*...*/);
+            if (villageUpdateResult.modifiedCount === 0)
+              throw new InternalServerErrorException(/*...*/);
 
-      await this.buildingJobService.save(buildingJob);
+            this.logger.log(
+              `[Village: ${villageId}] Opérations BDD transactionnelles réussies.`,
+            );
 
-      // Créer l'item de queue (utiliser le constructeur TypeORM)
-      addedQueueItemData = new ConstructionQueueItem(); // Le constructeur initialise l'_id
-      addedQueueItemData.buildingInstanceId = newBuildingInstanceId;
-      addedQueueItemData.buildingName = buildingName;
-      addedQueueItemData.targetLevel = targetLevel;
-      addedQueueItemData.startTime = startTime;
-      addedQueueItemData.endTime = endTime;
-      addedQueueItemData.buildingJobId = buildingJob._id; // Assigner l'ID de l'event sauvegardé
-
-      village.constructionQueue.push(addedQueueItemData);
-
-      // Sauvegarder l'entité Village racine avec TOUS les changements (ressources, buildings, queue)
-      await this.villageRepository.save(village); // Appel save sur le repository
-      this.logger.log(
-        `[Village: ${villageId}] Construction ${buildingName} Lvl ${targetLevel} ajoutée à la queue. Event: ${gameEventId.toString()}`,
-      );
+            // 4. RETOURNER les données nécessaires
+            return {
+              savedBuildingJob: savedJob,
+              addedQueueItem: queueItem, // Retourner l'instance avec son ID généré
+              villageId: initialVillage._id,
+            };
+            // --- Fin du callback ---
+          },
+        ); // Fin de withTransaction
     } catch (error) {
       this.logger.error(
-        `[Village: ${villageId}] Erreur BDD startConstruction: ${error instanceof Error ? error.message : String(error)}`,
-        error instanceof Error ? error.stack : undefined,
+        `[Village: ${villageId}] Transaction startConstruction échouée: ${error}`,
+        error,
       );
-      // Ici, l'état peut être incohérent si l'event a été créé mais le village non sauvegardé.
-      // Une transaction serait idéale pour garantir l'atomicité.
+      // Pas besoin de abortTransaction avec withTransaction
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      )
+        throw error;
       throw new InternalServerErrorException(
-        'Erreur serveur lors de la mise à jour du village.',
+        'Erreur serveur pendant la transaction BDD.',
+      );
+    } finally {
+      await session.endSession(); // Toujours terminer la session
+    }
+    // --- Suite des opérations ---
+    // Vérifier txResult (il ne sera null que si une erreur est survenue AVANT l'appel à withTransaction ou si withTransaction retourne null)
+    if (!txResult) {
+      this.logger.error(
+        `[Village: ${villageId}] Résultat de transaction manquant après try/catch.`,
+      );
+      throw new InternalServerErrorException(
+        'État incohérent après la transaction (résultat manquant).',
       );
     }
 
-    const jobId = await this.buildingJobPublisher.scheduleJob({
-      job_type: GAME_JOB_TYPES.BUILDING_JOB,
-      payload: {
-        database_job_id: buildingJob._id.toString(),
-      },
-      options: {
-        delay: endTime.getTime() - Date.now(),
-        removeOnComplete: true,
-        removeOnFail: { age: 24 * 3600 },
-      },
-    });
+    // Les types sont maintenant corrects ! Pas besoin d'assertions 'as Type'.
 
+    console.log({txResult});
+    const { savedBuildingJob, addedQueueItem } = txResult;
+    const buildingJobId = savedBuildingJob._id.toString();
+    const queueItemId = addedQueueItem._id; // Utiliser l'ID de l'objet retourné
+
+    // 2. Planifier le job BullMQ
+    let jobId: string | undefined;
+    try {
+      jobId = await this.buildingJobPublisher.scheduleJob({
+        job_type: GAME_JOB_TYPES.BUILDING_JOB,
+        payload: { database_job_id: buildingJobId },
+        options: {
+          delay: Math.max(0, endTime.getTime() - Date.now()),
+          removeOnComplete: true,
+          removeOnFail: { age: 24 * 3600 },
+        },
+      });
+
+      console.log({jobId});
+    } catch (scheduleError) {
+      this.logger.error(
+        `[Village: ${villageId}] Échec planification job ${buildingJobId}: ${scheduleError}`,
+      );
+      // COMPENSATION
+      await this.buildingJobService.update(buildingJobId, {
+        status: GAME_JOB_STATUS.FAILED,
+      });
+      await this.villageRepository.pullFromConstructionQueue(
+        txResult.villageId,
+        queueItemId,
+      );
+      // ... autres compensations ...
+      throw new InternalServerErrorException(
+        'La construction a été enregistrée mais sa planification a échoué.',
+      );
+    }
+
+    // 3. Mettre à jour les jobIds (best effort)
     if (jobId) {
-      // Assurez-vous que l'item de queue et son ID existent avant de continuer
-      if (!addedQueueItemData || !addedQueueItemData._id) {
-        this.logger.error(
-          `[Village: ${villageId}] Impossible de mettre à jour jobId: addedQueueItemData ou son _id est manquant.`,
+      try {
+        const village_Id_For_Update = txResult.villageId; // Utiliser l'ID retourné
+        const updateVillageResult = await this.villageRepository.updateOne(
+          { _id: village_Id_For_Update, 'constructionQueue._id': queueItemId },
+          { $set: { 'constructionQueue.$.jobId': jobId } },
         );
-        // Vous pourriez vouloir lever une erreur ici ou gérer ce cas autrement
-      } else {
-        const queueItemId = addedQueueItemData._id; // Récupérer le vrai ObjectId
+        const updateJobResult = await this.buildingJobService.update(
+          buildingJobId,
+          { queuedJobId: jobId },
+        );
 
-        try {
-          const updateResult = await this.villageRepository.updateOne(
-            {
-              _id: village._id,
-              'constructionQueue._id': queueItemId,
-            },
-            {
-              $set: { 'constructionQueue.$.jobId': jobId },
-            },
+        if (updateVillageResult.modifiedCount > 0 && updateJobResult) {
+          this.logger.log(
+            `[Village: ${villageId}] JobId ${jobId} enregistré pour item ${queueItemId.toString()} et job ${buildingJobId}`,
           );
-
-          await this.buildingJobService.update(buildingJob._id.toString(), {
-            queuedJobId: jobId,
-          });
-
-          // Vérifier le résultat de la mise à jour (optionnel mais utile pour le debug)
-          if (updateResult.affected === 0) {
-            // Si rien ne correspond au filtre (village ou item non trouvé)
-            this.logger.warn(
-              `[Village: ${villageId}] Aucun village/item trouvé pour la mise à jour du jobId pour l'item ${queueItemId.toString()}`,
-            );
-          } else {
-            // Succès
-            this.logger.log(
-              `[Village: ${villageId}] JobId ${jobId} enregistré pour item ${queueItemId.toString()}`,
-            );
-          }
-        } catch (updateError) {
-          this.logger.error(
-            `[Village: ${villageId}] Erreur MAJ jobId ${jobId} pour item ${queueItemId.toString()}: ${updateError instanceof Error ? updateError.message : updateError}`,
-            updateError instanceof Error ? updateError.stack : undefined,
+        } else {
+          this.logger.warn(
+            `[Village: ${villageId}] JobId ${jobId} non enregistré pour item ${queueItemId.toString()} et job ${buildingJobId}.`,
           );
-          // Gérer l'erreur de manière appropriée
-          // Faut-il annuler le job BullMQ ici ?
         }
+      } catch (updateError) {
+        this.logger.error(
+          `[Village: ${villageId}] Erreur lors de l'enregistrement du jobId ${jobId} pour item ${queueItemId.toString()} et job ${buildingJobId}: ${updateError}`,
+        );
       }
     }
 
-    // Retourner une version fraîche du village depuis la BDD est plus sûr
-    // car l'objet 'village' en mémoire peut ne pas refléter la mise à jour du jobId
-    // si on ne l'a pas mis à jour manuellement après l'appel à updateOne.
-    const freshVillage = await this.villageRepository.findById(villageId);
-    if (!freshVillage) {
-      this.logger.error(
-        `[Village: ${villageId}] Village non trouvé après tentative de MAJ du jobId.`,
+    // 4. Retourner l'état final (re-fetch est plus sûr)
+    const finalVillage = await this.villageRepository.findById(villageId);
+    if (!finalVillage) {
+      throw new InternalServerErrorException(
+        "Incohérence: Village disparu après l'opération.",
       );
-      // Retourner l'état précédent ou lever une erreur ? Ici on retourne l'état en mémoire (potentiellement sans jobId)
-      return village;
     }
-    return freshVillage;
+    return finalVillage;
   }
 }

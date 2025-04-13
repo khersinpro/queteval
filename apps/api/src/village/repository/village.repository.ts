@@ -1,130 +1,184 @@
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { Injectable, Logger } from '@nestjs/common'; // Ajouter Logger si besoin
+import { InjectModel } from '@nestjs/mongoose'; // Import Mongoose
 import {
-  Document,
-  MongoRepository,
-  ObjectLiteral,
-  UpdateFilter,
-  UpdateOptions,
-  UpdateResult,
-} from 'typeorm';
-import { ObjectId } from 'mongodb';
-import { Village } from '../document/village.document';
-import { DeepPartial } from 'typeorm';
+  Model,
+  FilterQuery,
+  UpdateQuery,
+  UpdateWriteOpResult,
+  MongooseUpdateQueryOptions,
+} from 'mongoose'; // Import Mongoose types
+import { ObjectId } from 'mongodb'; // Garder pour le typage si utile
+import { Village, VillageDocument } from '../document/village.schema'; // Importer le schéma/document Mongoose
 
 @Injectable()
 export class VillageRepository {
+  // Ajouter un logger si vous l'utilisez (comme dans l'ancien code pour les erreurs)
+  private readonly logger = new Logger(VillageRepository.name);
+
   constructor(
-    @InjectRepository(Village, 'mongodb')
-    private readonly villageRepository: MongoRepository<Village>,
+    @InjectModel(Village.name) // Injecter le Modèle Mongoose principal
+    private readonly villageModel: Model<VillageDocument>, // Utiliser le type Document Mongoose
   ) {}
 
   /**
-   * Crée une instance de Village (sans sauvegarder)
-   * Utile pour appliquer des logiques avant sauvegarde.
-   */
-  createInstance(data: DeepPartial<Village>): Village {
-    return this.villageRepository.create(data);
-  }
-
-  /**
-   * Sauvegarde une instance de Village (nouvelle ou existante)
-   */
-  async save(village: Village): Promise<Village> {
-    return this.villageRepository.save(village);
-  }
-
-  /**
    * Crée et sauvegarde un nouveau village directement.
+   * Gère l'initialisation des valeurs par défaut via le schéma Mongoose.
+   * @param data Données partielles pour créer le village.
+   * @returns Le document Village sauvegardé.
    */
-  async createAndSave(data: DeepPartial<Village>): Promise<Village> {
-    const villageInstance = this.createInstance(data);
-
-    return this.villageRepository.save(villageInstance);
-  }
-
-  async findAll(): Promise<Village[]> {
-    return this.villageRepository.find();
-  }
-
-  async findById(id: string): Promise<Village | null> {
+  async create(data: Partial<Village>): Promise<VillageDocument> {
+    // Utiliser la méthode statique create du modèle Mongoose
+    // Pas besoin de gérer les defaults ici s'ils sont dans le schéma
     try {
-      const objectId = new ObjectId(id);
-
-      return await this.villageRepository.findOneBy({ _id: objectId });
+      const createdVillage = await this.villageModel.create(data);
+      return createdVillage;
     } catch (error) {
-      console.error(`Error finding village by ID ${id}:`, error);
-      return null;
+      this.logger.error(`Error creating village: ${error}`);
+      throw error; // Renvoyer l'erreur pour une gestion supérieure
     }
-  }
-
-  async update(
-    id: string,
-    patch: DeepPartial<Village>,
-  ): Promise<Village | null> {
-    let objectId: ObjectId;
-    try {
-      objectId = new ObjectId(id);
-    } catch (error) {
-      console.error(`Invalid ID format for update ${id}:`, error);
-      return null;
-    }
-
-    const updateResult = await this.villageRepository.update(
-      { _id: objectId },
-      patch,
-    );
-
-    if (updateResult.affected === 0) {
-      return null;
-    }
-
-    return await this.villageRepository.findOneBy({ _id: objectId });
-  }
-
-  async delete(id: string): Promise<Village | null> {
-    let objectId: ObjectId;
-    try {
-      objectId = new ObjectId(id);
-    } catch (error) {
-      console.error(`Invalid ID format for delete ${id}:`, error);
-      return null;
-    }
-
-    const villageToDelete = await this.villageRepository.findOneBy({
-      _id: objectId,
-    });
-
-    if (!villageToDelete) {
-      return null;
-    }
-
-    const deleteResult = await this.villageRepository.delete({ _id: objectId });
-
-    if (deleteResult.affected === 0) {
-      console.error(`Failed to delete village ${id} after finding it.`);
-      return null;
-    }
-
-    return villageToDelete;
-  }
-
-  async findByUserId(userId: number): Promise<Village[]> {
-    return this.villageRepository.find({ where: { userId: userId } });
   }
 
   /**
-   * Exécute une opération updateOne native de MongoDB via le repository injecté.
-   * @param filter Le filtre pour trouver le(s) document(s) à mettre à jour.
-   * @param update L'opération de mise à jour (ex: { $set: { ... } }).
-   * @param options Options natives du driver MongoDB (optionnel).
-   * @returns Promise<UpdateResult> Le résultat de l'opération du driver MongoDB.
+   * Trouve tous les villages.
+   */
+  async findAll(): Promise<VillageDocument[]> {
+    return this.villageModel.find().exec();
+  }
+
+  async findById(id: string | ObjectId): Promise<VillageDocument | null> {
+    try {
+      return await this.villageModel.findById(id).exec();
+    } catch (
+      error: unknown // <-- Typer en unknown
+    ) {
+      let errorMessage = 'Unknown error in findById';
+      let errorStack: string | undefined = undefined;
+
+      // Vérifier si c'est une instance d'Error standard
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        errorStack = error.stack;
+        // Vérifier spécifiquement la CastError de Mongoose
+        if (error.name === 'CastError') {
+          this.logger.warn(
+            `Invalid ID format for findById: ${typeof id === 'string' ? id : id.toString()}`,
+          );
+          return null; // Retourner null pour CastError
+        }
+      } else {
+        // Gérer les cas où autre chose qu'une Error est jetée
+        errorMessage = String(error);
+      }
+
+      this.logger.error(
+        `Error finding village by ID ${typeof id === 'string' ? id : id.toString()}: ${errorMessage}`,
+        errorStack, // Passer la stack trace si disponible
+      );
+      // Renvoyer l'erreur originale ou une nouvelle erreur standardisée
+      throw error;
+    }
+  }
+
+  // Appliquer une logique similaire pour les catch dans update() et delete()
+  async update(
+    id: string | ObjectId,
+    patch: Partial<Village>,
+    options?: MongooseUpdateQueryOptions,
+  ): Promise<VillageDocument | null> {
+    try {
+      const query = this.villageModel.findByIdAndUpdate(id, patch);
+      if (options) {
+        query.setOptions(options);
+      }
+      return await query.exec();
+    } catch (error: unknown) {
+      let errorMessage = 'Unknown error in update';
+      let errorStack: string | undefined = undefined;
+
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        errorStack = error.stack;
+        if (error.name === 'CastError') {
+          this.logger.warn(
+            `Invalid ID format for update: ${typeof id === 'string' ? id : id.toString()}`,
+          );
+          return null;
+        }
+      } else {
+        errorMessage = String(error);
+      }
+      this.logger.error(
+        `Error updating village ${typeof id === 'string' ? id : id.toString()}: ${errorMessage}`,
+        errorStack,
+      );
+      throw error;
+    }
+  }
+
+  async delete(id: string | ObjectId): Promise<VillageDocument | null> {
+    try {
+      return await this.villageModel.findByIdAndDelete(id).exec();
+    } catch (error: unknown) {
+      // <-- Typer en unknown
+      let errorMessage = 'Unknown error in delete';
+      let errorStack: string | undefined = undefined;
+
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        errorStack = error.stack;
+        if (error.name === 'CastError') {
+          this.logger.warn(
+            `Invalid ID format for delete: ${typeof id === 'string' ? id : id.toString()}`,
+          );
+          return null;
+        }
+      } else {
+        errorMessage = String(error);
+      }
+      this.logger.error(
+        `Error deleting village ${typeof id === 'string' ? id : id.toString()}: ${errorMessage}`,
+        errorStack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Trouve les villages appartenant à un utilisateur spécifique.
+   */
+  async findByUserId(userId: number): Promise<VillageDocument[]> {
+    return this.villageModel.find({ userId: userId }).exec();
+  }
+
+  /**
+   * Exécute une opération updateOne native de MongoDB via le modèle Mongoose injecté.
+   * Retourne le résultat brut du driver. Utiliser pour opérations atomiques ($inc, $pull...).
+   * @param filter Filtre Mongoose/MongoDB pour trouver le document.
+   * @param update Opération de mise à jour Mongoose/MongoDB (ex: { $set: { ... }, $pull: { ... } }).
+   * @param options Options Mongoose/natives (optionnel).
+   * @returns Promise<UpdateWriteOpResult> Le résultat de l'opération Mongoose.
    */
   async updateOne(
-    filter: ObjectLiteral,
-    update: UpdateFilter<Document>,
-    options?: UpdateOptions,
-  ): Promise<Document | UpdateResult> {
-    return await this.villageRepository.updateOne(filter, update, options);
+    filter: FilterQuery<VillageDocument>, // Type Mongoose pour les filtres
+    update: UpdateQuery<VillageDocument>, // Type Mongoose pour les updates ($set, $pull...)
+    options?: MongooseUpdateQueryOptions, // Type Mongoose pour les options
+  ): Promise<UpdateWriteOpResult> {
+    return this.villageModel.updateOne(filter, update, options).exec();
+  }
+
+  /**
+   * Supprime un élément du tableau constructionQueue en utilisant updateOne.
+   * @param villageId L'ObjectId du village.
+   * @param queueItemId L'ObjectId de l'item à retirer.
+   * @returns Promise<UpdateWriteOpResult> Le résultat de l'opération Mongoose updateOne.
+   */
+  async pullFromConstructionQueue(
+    villageId: ObjectId,
+    queueItemId: ObjectId,
+  ): Promise<UpdateWriteOpResult> {
+    return this.updateOne(
+      { _id: villageId },
+      { $pull: { constructionQueue: { _id: queueItemId } } },
+    );
   }
 }
